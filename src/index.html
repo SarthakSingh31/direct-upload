@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Direct Upload</title>
+    </head>
+    <body>
+        <form id="upload">
+            <input type="file" id="file-upload" name="file">
+            <input type="submit" value="Upload">
+            <span id="uploaded-percent"></span>
+        </form>
+
+        <script src="https://cdn.jsdelivr.net/npm/axios@1.1.2/dist/axios.min.js"></script>
+        <script>
+            document.getElementById("upload").onsubmit = (evt) => {
+                evt.preventDefault();
+
+                const file = document.getElementById("file-upload").files[0];
+                const up_precent = document.getElementById('uploaded-percent');
+
+                fetch("get_signed_url?name=" + encodeURIComponent(file.name))
+                    .then((resp) => {
+                        resp.text().then((put_url) => {
+                            axios.request({
+                                method: "put", 
+                                url: put_url, 
+                                data: file, 
+                                onUploadProgress: (p) => {
+                                    up_precent.innerText = (p.progress  * 100).toFixed(2) + " %";
+                                }
+                            }).catch(console.log);
+                        });
+                    })
+                    .catch(console.log);
+            }
+        </script>
+    </body>
+</html>
