@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::env;
 use std::sync::Arc;
 
@@ -6,7 +7,7 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing;
 use google_cloud_default::WithAuthExt;
 use google_cloud_storage::client::{Client, ClientConfig};
-use google_cloud_storage::sign::{SignedURLMethod, SignedURLOptions};
+use google_cloud_storage::http::objects::upload::{Media, UploadObjectRequest, UploadType};
 
 /// The enviorment variable used to get the port of the server
 const PORT_ENV_VAR: &'static str = "DIRECT_UPLOAD_PORT";
@@ -27,7 +28,7 @@ async fn main() {
 
     let app = axum::Router::new()
         .route("/", routing::get(index))
-        .route("/get_signed_url", routing::get(get_signed_url))
+        .route("/get_session_url", routing::get(get_session_url))
         .with_state(Arc::new(AppState { client }));
 
     axum::Server::bind(
@@ -48,25 +49,32 @@ async fn index() -> Response {
 }
 
 #[derive(serde::Deserialize)]
-struct SigningArgs {
-    name: String,
+pub struct SessionUrlArgs {
+    pub name: Cow<'static, str>,
+    pub content_type: Cow<'static, str>,
+    pub content_length: usize,
 }
 
-async fn get_signed_url(
+async fn get_session_url(
     State(state): State<Arc<AppState>>,
-    Query(args): Query<SigningArgs>,
+    Query(args): Query<SessionUrlArgs>,
 ) -> Response {
-    state
+    let client = state
         .client
-        .signed_url(
-            "test-bucket-the-first",
-            &args.name,
-            SignedURLOptions {
-                method: SignedURLMethod::PUT,
+        .prepare_resumable_upload(
+            &UploadObjectRequest {
+                bucket: "test-bucket-the-first".to_string(),
                 ..Default::default()
             },
+            &UploadType::Simple(Media {
+                name: args.name,
+                content_length: Some(args.content_length),
+                content_type: args.content_type,
+            }),
+            None,
         )
         .await
-        .expect("Failed to generate the signing url")
-        .into_response()
+        .expect("Failed to get resumable upload session");
+
+    client.url().to_owned().into_response()
 }

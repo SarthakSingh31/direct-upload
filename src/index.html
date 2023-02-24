@@ -11,7 +11,6 @@
             <span id="uploaded-percent"></span>
         </form>
 
-        <script src="https://cdn.jsdelivr.net/npm/axios@1.1.2/dist/axios.min.js"></script>
         <script>
             document.getElementById("upload").onsubmit = (evt) => {
                 evt.preventDefault();
@@ -19,17 +18,41 @@
                 const file = document.getElementById("file-upload").files[0];
                 const up_precent = document.getElementById('uploaded-percent');
 
-                fetch("get_signed_url?name=" + encodeURIComponent(file.name))
+                fetch(`get_session_url?name=${encodeURIComponent(file.name)}&content_type=${encodeURIComponent(file.type)}&content_length=${file.size}`)
                     .then((resp) => {
-                        resp.text().then((put_url) => {
-                            axios.request({
-                                method: "put", 
-                                url: put_url, 
-                                data: file, 
-                                onUploadProgress: (p) => {
-                                    up_precent.innerText = (p.progress  * 100).toFixed(2) + " %";
-                                }
-                            }).catch(console.log);
+                        resp.text().then((session_url) => {
+                            let uploaded = false;
+                            
+                            // Upload for the first time
+                            // This will raise a cors error but the file is actaully uploaded and there is nothing
+                            // to worry about
+                            const req = new XMLHttpRequest();
+                            req.upload.onprogress = (evt) => {
+                                up_precent.innerText = ((evt.loaded / evt.total) * 100).toFixed(2) + " %";
+                            };
+                            req.onerror = (evt) => {
+                                console.log(evt);
+                            };
+                            req.onloadend = async (evt) => {
+                                console.log(evt);
+
+                                let requested_succesfully = false;
+                                // while (!requested_succesfully) {
+                                    fetch(session_url, {
+                                        method: "PUT",
+                                        headers: { "Content-Length": 0, "Content-Range": `bytes */${file.size}` },
+                                    }).then((resp) => {
+                                        if (resp.status < 500) {
+                                            requested_succesfully = true;
+                                        }
+                                        if (resp.status < 300) {
+                                            uploaded = true;
+                                        }
+                                    }).await;
+                                // }
+                            };
+                            req.open("PUT", session_url, true);
+                            req.send(file);
                         });
                     })
                     .catch(console.log);
