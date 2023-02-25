@@ -40,6 +40,8 @@
                             req.upload.onprogress = (evt) => {
                                 up_precent.innerText = (((evt.loaded + uploaded) / (evt.total + uploaded)) * 100).toFixed(2) + " %";
                             };
+                            // This is onerror instead of onload because the google request errors
+                            // out due to unfixable cors issue on google's side
                             req.onerror = (evt) => {
                                 localStorage.removeItem("file-hash");
                                 localStorage.removeItem("file-url");
@@ -62,6 +64,8 @@
                                     req.upload.onprogress = (evt) => {
                                         up_precent.innerText = ((evt.loaded / evt.total) * 100).toFixed(2) + " %";
                                     };
+                                    // This is onerror instead of onload because the google request errors
+                                    // out due to unfixable cors issue on google's side
                                     req.onerror = (evt) => {
                                         localStorage.removeItem("file-hash");
                                         localStorage.removeItem("file-url");
