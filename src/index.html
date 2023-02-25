@@ -11,6 +11,9 @@
             <span id="uploaded-percent"></span>
         </form>
 
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/core.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/md5.js"></script>
+
         <script>
             document.getElementById("upload").onsubmit = (evt) => {
                 evt.preventDefault();
@@ -18,44 +21,59 @@
                 const file = document.getElementById("file-upload").files[0];
                 const up_precent = document.getElementById('uploaded-percent');
 
-                fetch(`get_session_url?name=${encodeURIComponent(file.name)}&content_type=${encodeURIComponent(file.type)}&content_length=${file.size}`)
-                    .then((resp) => {
-                        resp.text().then((session_url) => {
-                            let uploaded = false;
-                            
-                            // Upload for the first time
-                            // This will raise a cors error but the file is actaully uploaded and there is nothing
-                            // to worry about
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const hash = CryptoJS.MD5(new TextDecoder().decode(evt.target.result)).toString();
+                    
+                    if (localStorage.getItem("file-hash") === hash) {
+                        fetch(localStorage.getItem("file-url"), {
+                            method: "PUT",
+                            headers: { "Content-Length": 0, "Content-Range": `bytes */${file.size}` },
+                        }).then((resp) => {
+                            let range = resp.headers.get("Range");
+                            let uploaded = range === null ? 0 : parseInt(range.split("-")[1]);
+
+                            const remaining = evt.target.result.slice(uploaded + 1);
+
+                            // Uploading for the rest of it
                             const req = new XMLHttpRequest();
                             req.upload.onprogress = (evt) => {
-                                up_precent.innerText = ((evt.loaded / evt.total) * 100).toFixed(2) + " %";
+                                up_precent.innerText = (((evt.loaded + uploaded) / (evt.total + uploaded)) * 100).toFixed(2) + " %";
                             };
                             req.onerror = (evt) => {
-                                console.log(evt);
+                                localStorage.removeItem("file-hash");
+                                localStorage.removeItem("file-url");
                             };
-                            req.onloadend = async (evt) => {
-                                console.log(evt);
-
-                                let requested_succesfully = false;
-                                // while (!requested_succesfully) {
-                                    fetch(session_url, {
-                                        method: "PUT",
-                                        headers: { "Content-Length": 0, "Content-Range": `bytes */${file.size}` },
-                                    }).then((resp) => {
-                                        if (resp.status < 500) {
-                                            requested_succesfully = true;
-                                        }
-                                        if (resp.status < 300) {
-                                            uploaded = true;
-                                        }
-                                    }).await;
-                                // }
-                            };
-                            req.open("PUT", session_url, true);
-                            req.send(file);
+                            req.open("PUT", localStorage.getItem("file-url"), true);
+                            req.setRequestHeader("Content-Range", `bytes ${uploaded + 1}-${file.size - 1}/${file.size}`);
+                            req.send(remaining);
                         });
-                    })
-                    .catch(console.log);
+                    } else {
+                        fetch(`get_session_url?name=${encodeURIComponent(file.name)}&content_type=${encodeURIComponent(file.type)}&content_length=${file.size}`)
+                            .then((resp) => {
+                                resp.text().then((session_url) => {
+                                    localStorage.setItem("file-hash", hash);
+                                    localStorage.setItem("file-url", session_url);
+                                    
+                                    // Upload for the first time
+                                    // This will raise a cors error but the file is actaully uploaded and there is nothing
+                                    // to worry about
+                                    const req = new XMLHttpRequest();
+                                    req.upload.onprogress = (evt) => {
+                                        up_precent.innerText = ((evt.loaded / evt.total) * 100).toFixed(2) + " %";
+                                    };
+                                    req.onerror = (evt) => {
+                                        localStorage.removeItem("file-hash");
+                                        localStorage.removeItem("file-url");
+                                    };
+                                    req.open("PUT", session_url, true);
+                                    req.send(evt.target.result);
+                                });
+                            })
+                            .catch(console.log);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
             }
         </script>
     </body>
