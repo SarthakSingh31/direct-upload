@@ -1,4 +1,5 @@
 use std::env;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::extract::{Query, State};
@@ -11,7 +12,7 @@ use google_cloud_storage::sign::{SignedURLMethod, SignedURLOptions};
 /// The enviorment variable used to get the port of the server
 const PORT_ENV_VAR: &'static str = "DIRECT_UPLOAD_PORT";
 /// The default port which the webserver will bind to. Also the default port of the redirect uri for OAuth.
-const DEFAULT_PORT: &'static str = "8890";
+const DEFAULT_PORT: u16 = 8890;
 
 struct AppState {
     client: Client,
@@ -30,17 +31,11 @@ async fn main() {
         .route("/get_signed_url", routing::get(get_signed_url))
         .with_state(Arc::new(AppState { client }));
 
-    axum::Server::bind(
-        &format!(
-            "0.0.0.0:{}",
-            env::var(PORT_ENV_VAR).unwrap_or(DEFAULT_PORT.to_string())
-        )
-        .parse()
-        .unwrap(),
-    )
-    .serve(app.into_make_service())
-    .await
-    .unwrap();
+    let port = env::var(PORT_ENV_VAR).map_or(DEFAULT_PORT, |v| v.parse().unwrap_or(DEFAULT_PORT));
+    axum::Server::bind(&SocketAddr::from(([0, 0, 0, 0], port)))
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 }
 
 async fn index() -> Response {
