@@ -11,9 +11,6 @@
             <span id="uploaded-percent"></span>
         </form>
 
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/core.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/md5.js"></script>
-
         <script>
             document.getElementById("upload").onsubmit = (evt) => {
                 evt.preventDefault();
@@ -23,9 +20,7 @@
 
                 const reader = new FileReader();
                 reader.onload = (evt) => {
-                    const hash = CryptoJS.MD5(new TextDecoder().decode(evt.target.result)).toString();
-                    
-                    if (localStorage.getItem("file-hash") === hash) {
+                    if (localStorage.getItem("file-name") === file.name) {
                         fetch(localStorage.getItem("file-url"), {
                             method: "PUT",
                             headers: { "Content-Length": 0, "Content-Range": `bytes */${file.size}` },
@@ -43,7 +38,7 @@
                             // This is onerror instead of onload because the google request errors
                             // out due to unfixable cors issue on google's side
                             req.onerror = (evt) => {
-                                localStorage.removeItem("file-hash");
+                                localStorage.removeItem("file-name");
                                 localStorage.removeItem("file-url");
                             };
                             req.open("PUT", localStorage.getItem("file-url"), true);
@@ -54,7 +49,7 @@
                         fetch(`get_session_url?name=${encodeURIComponent(file.name)}&content_type=${encodeURIComponent(file.type)}&content_length=${file.size}`)
                             .then((resp) => {
                                 resp.text().then((session_url) => {
-                                    localStorage.setItem("file-hash", hash);
+                                    localStorage.setItem("file-name", file.name);
                                     localStorage.setItem("file-url", session_url);
                                     
                                     // Upload for the first time
@@ -67,7 +62,7 @@
                                     // This is onerror instead of onload because the google request errors
                                     // out due to unfixable cors issue on google's side
                                     req.onerror = (evt) => {
-                                        localStorage.removeItem("file-hash");
+                                        localStorage.removeItem("file-name");
                                         localStorage.removeItem("file-url");
                                     };
                                     req.open("PUT", session_url, true);
