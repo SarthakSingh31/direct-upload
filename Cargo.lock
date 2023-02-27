@@ -238,15 +238,20 @@ dependencies = [
 name = "direct-upload"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "console_error_panic_hook",
  "getrandom",
+ "js-sys",
  "jwt-compact",
  "rsa 0.8.1",
  "serde",
  "serde_json",
  "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
  "worker",
+ "worker-sys",
 ]
 
 [[package]]

@@ -3,7 +3,9 @@ mod client;
 use std::collections::HashMap;
 
 use url::Url;
-use worker::{console_log, Env, Headers, Request, RequestInit, Response};
+use worker::{Env, Headers, Request, RequestInit, Response};
+
+use client::Client;
 
 const BUCKET: &'static str = "test-bucket-the-first/";
 
@@ -19,7 +21,10 @@ async fn main(req: Request, env: Env, _ctx: worker::Context) -> worker::Result<R
             Response::from_html(include_str!("index.html"))
         })
         .get_async("/get_session_url", |req, ctx| async move {
-            let mut client = client::Client::new(&ctx.env)?;
+            let client = ctx
+                .durable_object(Client::BINDING)?
+                .id_from_name(Client::NAME)?
+                .get_stub()?;
 
             let req_url = req.url()?;
             let query: HashMap<String, String> = req_url
@@ -47,15 +52,14 @@ async fn main(req: Request, env: Env, _ctx: worker::Context) -> worker::Result<R
                 redirect: worker::RequestRedirect::default(),
             };
 
-            console_log!("{}", url.as_str());
-            let resp = client.request(url.as_str(), init).await?;
+            let resp = client
+                .fetch_with_request(Request::new_with_init(url.as_str(), &init)?)
+                .await?;
 
-            Response::from_bytes(
+            Response::ok(
                 resp.headers()
                     .get("location")?
-                    .expect("No location header was found")
-                    .as_bytes()
-                    .to_vec(),
+                    .expect("No location header was found"),
             )
         })
         .run(req, env)

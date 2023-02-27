@@ -3,34 +3,37 @@ use jwt_compact::{
     prelude::*,
 };
 use rsa::pkcs8::DecodePrivateKey;
-use worker::{Env, Request, Response};
+use worker::{Env, Request, Response, State};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Token {
     pub access_token: String,
     pub token_type: String,
     pub expiry: Option<u64>,
 }
 
+impl Token {
+    const TOKEN_KEY: &'static str = "TOKEN";
+}
+
+#[worker::durable_object]
 pub struct Client {
     private_key: String,
     service_email_id: String,
-
+    state: State,
     token: Option<Token>,
 }
 
 impl Client {
+    pub const BINDING: &'static str = "Client";
+    pub const NAME: &'static str = "Client";
     const TOKEN_URL: &'static str = "https://oauth2.googleapis.com/token";
 
-    pub fn new(env: &Env) -> worker::Result<Self> {
-        Ok(Client {
-            private_key: env.secret("GCP_PRIVATE_KEY")?.to_string(),
-            service_email_id: env.secret("GCP_SERVICE_EMAIL_ID")?.to_string(),
-            token: None,
-        })
-    }
-
     async fn get_token(&mut self) -> worker::Result<Token> {
+        if self.token.is_none() {
+            self.token = self.state.storage().get(Token::TOKEN_KEY).await.ok();
+        }
+
         if let Some(token) = self.token.clone() {
             if let Some(expiry) = token.expiry {
                 if expiry < worker::Date::now().as_millis() {
@@ -107,6 +110,10 @@ impl Client {
         let mut resp = worker::Fetch::Request(req).send().await?;
         let token: Token = resp.json::<InternalToken>().await?.into();
         self.token = Some(token.clone());
+        self.state
+            .storage()
+            .put(Token::TOKEN_KEY, token.clone())
+            .await?;
 
         Ok(token)
     }
@@ -126,5 +133,35 @@ impl Client {
         worker::Fetch::Request(Request::new_with_init(uri, &init)?)
             .send()
             .await
+    }
+}
+
+#[worker::durable_object]
+impl worker::DurableObject for Client {
+    fn new(state: State, env: Env) -> Self {
+        Client {
+            private_key: env
+                .secret("GCP_PRIVATE_KEY")
+                .expect("Failed to find GCP_PRIVATE_KEY secret")
+                .to_string(),
+            service_email_id: env
+                .secret("GCP_SERVICE_EMAIL_ID")
+                .expect("Failed to find GCP_SERVICE_EMAIL_ID secret")
+                .to_string(),
+            state,
+            token: None,
+        }
+    }
+
+    async fn fetch(&mut self, req: Request) -> worker::Result<Response> {
+        let token = self.get_token().await?;
+        let mut req = req.clone_mut()?;
+
+        req.headers_mut()?.append(
+            "Authorization",
+            format!("Bearer {}", token.access_token).as_str(),
+        )?;
+
+        worker::Fetch::Request(req).send().await
     }
 }
