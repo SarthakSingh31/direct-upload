@@ -1,3 +1,5 @@
+//! A module to easily do google oauth authentication
+
 use jwt_compact::{
     alg::{Rsa, RsaPrivateKey},
     prelude::*,
@@ -6,16 +8,17 @@ use rsa::pkcs8::DecodePrivateKey;
 use worker::{Env, Request, Response, State};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Token {
-    pub access_token: String,
-    pub token_type: String,
-    pub expiry: Option<u64>,
+struct Token {
+    access_token: String,
+    token_type: String,
+    expiry: Option<u64>,
 }
 
 impl Token {
     const TOKEN_KEY: &'static str = "TOKEN";
 }
 
+/// It is an object that facilitates the authentication with google
 #[worker::durable_object]
 pub struct Client {
     private_key: String,
@@ -29,6 +32,7 @@ impl Client {
     pub const NAME: &'static str = "Client";
     const TOKEN_URL: &'static str = "https://oauth2.googleapis.com/token";
 
+    /// Generates the token if its out of date otherwise returns the current token
     async fn get_token(&mut self) -> worker::Result<Token> {
         if self.token.is_none() {
             self.token = self.state.storage().get(Token::TOKEN_KEY).await.ok();
@@ -116,23 +120,6 @@ impl Client {
             .await?;
 
         Ok(token)
-    }
-
-    pub async fn request(
-        &mut self,
-        uri: &str,
-        mut init: worker::RequestInit,
-    ) -> worker::Result<Response> {
-        let token = self.get_token().await?;
-
-        init.headers.append(
-            "Authorization",
-            format!("Bearer {}", token.access_token).as_str(),
-        )?;
-
-        worker::Fetch::Request(Request::new_with_init(uri, &init)?)
-            .send()
-            .await
     }
 }
 

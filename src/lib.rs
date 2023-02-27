@@ -17,9 +17,12 @@ async fn main(req: Request, env: Env, _ctx: worker::Context) -> worker::Result<R
     console_error_panic_hook::set_once();
 
     router
+        // Returns the index page
         .get_async("/", |_req, _ctx| async {
             Response::from_html(include_str!("index.html"))
         })
+        // Takes `name` and `content_type` as query parameters and returns a google storage resumable
+        // upload session url
         .get_async("/get_session_url", |req, ctx| async move {
             let client = ctx
                 .durable_object(Client::BINDING)?
