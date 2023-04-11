@@ -21,6 +21,14 @@ async fn main(req: Request, env: Env, _ctx: worker::Context) -> worker::Result<R
         .get_async("/", |_req, _ctx| async {
             Response::from_html(include_str!("index.html"))
         })
+        .options_async("/get_session_url", |_req, _ctx| async move {
+            let mut resp = Response::empty()?;
+
+            resp.headers_mut()
+                .append("Access-Control-Allow-Origin", "*")?;
+
+            Ok(resp)
+        })
         // Takes `name` and `content_type` as query parameters and returns a google storage resumable
         // upload session url
         .get_async("/get_session_url", |req, ctx| async move {
@@ -59,11 +67,16 @@ async fn main(req: Request, env: Env, _ctx: worker::Context) -> worker::Result<R
                 .fetch_with_request(Request::new_with_init(url.as_str(), &init)?)
                 .await?;
 
-            Response::ok(
+            let mut resp = Response::ok(
                 resp.headers()
                     .get("location")?
                     .expect("No location header was found"),
-            )
+            )?;
+
+            resp.headers_mut()
+                .append("Access-Control-Allow-Origin", "*")?;
+
+            Ok(resp)
         })
         .run(req, env)
         .await

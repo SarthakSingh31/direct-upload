@@ -5,7 +5,7 @@ use jwt_compact::{
     prelude::*,
 };
 use rsa::pkcs8::DecodePrivateKey;
-use worker::{Env, Request, Response, State};
+use worker::*;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct Token {

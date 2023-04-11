@@ -251,7 +251,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "worker",
- "worker-sys",
 ]
 
 [[package]]
